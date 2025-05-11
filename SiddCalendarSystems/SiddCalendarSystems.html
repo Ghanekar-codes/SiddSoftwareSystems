@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<!--
+Author: Siddhaant Ghanekar
+Production Date: 08-05-2025
+ -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calendar</title>
+  <link rel="icon" type="image/png" href="calendarlogo.png" />
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <style>
+    :root {
+      --sidebar-width: 250px;
+      --box-size: 30px;
+      --gap: 12px;
+      --border-color: #333;
+      --weekend-bg: #f5f5f5;
+      --written-outline: 2px solid #007bff;
+      --note-border: 1px solid #007bff;
+      --month-border: 1px solid #ddd;
+      --month-radius: 8px;
+      --month-padding: 8px;
+      --shadow: rgba(0, 0, 0, 0.1) 0px 2px 8px;
+      --highlight-today: rgba(0, 0, 0, 0.3);
+      --month-letter-spacing: 0.3em;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; display: flex; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: var(--border-color); background: #fafafa; height: 100vh; }
+    .sidebar {
+      min-width: 50vw;
+      max-width: 90vw;
+      width: var(--sidebar-width);
+      padding: var(--gap);
+      border-right: var(--written-outline);
+      background: #fff;
+      overflow-y: auto;
+      box-shadow: var(--shadow);
+      z-index: 1;
+      resize: horizontal;
+      overflow: auto;
+    }
+    .sidebar h2 { font-size: 1.2em; margin-bottom: var(--gap); position: sticky; top: var(--gap); background: #fff; }
+    .note-container, .search-container, .todo-container, .backup-container { margin-bottom: var(--gap); }
+    .calendar { flex: 1; overflow: auto; padding: var(--gap); position: relative; }
+    .year { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); margin-bottom: calc(var(--gap) * 2); }
+    .month { background: #fff; border: var(--month-border); border-radius: var(--month-radius); padding: var(--month-padding); box-shadow: var(--shadow); display: grid; grid-template-rows: auto 1fr; position: relative; }
+    .month-name { text-align: center; font-weight: bold; text-transform: uppercase; letter-spacing: var(--month-letter-spacing); margin-bottom: 6px; font-size: 1em; color: #555; }
+    .days { display: grid; grid-template-columns: repeat(7, var(--box-size)); grid-auto-rows: var(--box-size); gap: 1px; }
+    .day { border: 1px solid #eee; width: var(--box-size); height: var(--box-size); padding: 2px; font-size: 0.75em; text-align: right; cursor: pointer; background: #fff; transition: background 0.2s, transform 0.1s; }
+    .day:hover { background: #f0f8ff; transform: translateY(-1px); }
+    .day.weekend { background: var(--weekend-bg); font-weight: bold; }
+    .day.has-note { border: var(--note-border); outline: var(--written-outline); }
+    .day.today { background: var(--highlight-today); border-radius: 1px; text-decoration: underline; color: #FFF !important; }
+    .hidden { display: none !important; }
+    .note-overlay {
+      position: fixed;
+      top: 10%;
+      left: 5%;
+      width: 90%;
+      height: 80%;
+      background: rgba(255, 255, 255, 0.98);
+      z-index: 10;
+      padding: 20px;
+      display: none;
+      flex-direction: column;
+      border: 2px solid #007bff;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      resize: both;
+      overflow: auto;
+    }
+    .note-overlay textarea { flex: 1; width: 100%; resize: both; font-size: 1em; }
+    .note-overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .note-overlay button { background: #007bff; color: white; border: none; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+    .open-page-container { margin-top: var(--gap); }
+    .open-page-button { background-color: #007bff; color: white; border: 2px solid #0056b3; padding: 8px 16px; border-radius: 4px; cursor: pointer; width: 100%; text-align: center; font-size: 1em; }
+    .open-page-button:hover { background-color: #0056b3; border-color: #003366; }
+    #clock { font-family: serif; font-size: 1.6em; margin-top: 20px; color: #007bff; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
+    #search-box { height: 40px; width: 100%; font-size: 1em; padding: 10px; border: 2px solid #007bff; border-radius: 6px; margin-bottom: 12px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
+    #todo-editor { height: 400px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="search-container">
+      <h2>Search Notes</h2>
+      <input type="text" id="search-box" placeholder="Type to search notes...">
+    </div>
+    <div class="open-page-container">
+      <a href="ZettelkastDrive.html" target="_blank">
+        <button class="open-page-button">Zettelkast</button>
+      </a>
+    </div>
+        <div class="todo-container">
+      <h2>To-Do</h2>
+      <div id="todo-editor"></div>
+    </div>
+    <div class="backup-container">
+      <h2>Backup</h2>
+      <button onclick="downloadBackup()">Download Backup</button>
+      <input type="file" id="upload-backup" accept=".json" onchange="uploadBackup(event)">
+    </div>
+    <div id="clock"></div>
+  </div>
+
+  <div class="calendar" id="calendar"></div>
+
+  <div class="note-overlay" id="note-overlay">
+    <div class="note-overlay-header">
+      <span>Note for <span id="note-date">(none)</span></span>
+      <button onclick="closeOverlay()">Close</button>
+    </div>
+    <div id="note-editor"></div>
+  </div>
+
+  <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+  <script>
+    let currentDate = null;
+    // Use local date components for today
+    function getTodayString() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+    const todayString = getTodayString();
+
+    const noteOverlay = document.getElementById('note-overlay');
+    const noteEditor = new Quill('#note-editor', { theme: 'snow', modules: {
+      toolbar: [
+        [{ 'header': '1' }, { 'header': '2' }, { 'font': [] }],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['bold', 'italic', 'underline'],
+        [{ 'align': [] }], ['link'],
+        [{ 'size': ['small', 'medium', 'large', 'huge'] }],
+      ]
+    }});
+    const todoEditor = new Quill('#todo-editor', { theme: 'snow', modules: {
+      toolbar: [
+        [{ 'header': '1' }, { 'header': '2' }, { 'font': [] }],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['bold', 'italic', 'underline'],
+        [{ 'align': [] }], ['link'],
+        [{ 'size': ['small', 'medium', 'large', 'huge'] }],
+      ]
+    }});
+
+    // Clock
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').textContent = now.toLocaleTimeString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function saveNote(date, text) {
+      if (text.trim()) localStorage.setItem('note-' + date, text);
+      else localStorage.removeItem('note-' + date);
+      filterDays(document.getElementById('search-box').value);
+    }
+    function loadNote(date) {
+      return localStorage.getItem('note-' + date) || '';
+    }
+    function openNote(date) {
+      currentDate = date;
+      document.getElementById('note-date').textContent = date;
+      noteEditor.root.innerHTML = loadNote(date);
+      noteOverlay.style.display = 'flex';
+      noteEditor.focus();
+    }
+    function closeOverlay() {
+      noteOverlay.style.display = 'none';
+      if (currentDate) {
+        saveNote(currentDate, noteEditor.root.innerHTML);
+        currentDate = null;
+      }
+    }
+
+    // Generate calendar
+    function generateYear(year) {
+      const container = document.createElement('div');
+      container.className = 'year';
+      container.id = 'year' + year;
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      for (let m=0; m<12; m++) {
+        const monthDiv = document.createElement('div'); monthDiv.className='month';
+        const title = document.createElement('div'); title.className='month-name';
+        title.textContent = `${monthNames[m]} ${String(year).slice(-2)}`;
+        const daysGrid = document.createElement('div'); daysGrid.className='days';
+        const first = new Date(year,m,1).getDay();
+        const daysInMonth = new Date(year,m+1,0).getDate();
+        const total = first + daysInMonth;
+        const cells = total + ((7 - total%7)%7);
+        for (let i=0; i<cells; i++) {
+          const div = document.createElement('div');
+          if (i>=first && i<first+daysInMonth) {
+            const d = i-first+1;
+            const key = `${year}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            div.className='day';
+            if ([0,6].includes(new Date(year,m,d).getDay())) div.classList.add('weekend');
+            if (key===todayString) div.classList.add('today');
+            div.textContent = d;
+            div.dataset.date = key;
+            div.onclick = () => openNote(key);
+          }
+          daysGrid.appendChild(div);
+        }
+        monthDiv.append(title, daysGrid);
+        container.appendChild(monthDiv);
+      }
+      document.getElementById('calendar').appendChild(container);
+    }
+
+    // Update styles for all days
+    function updateAllDayStyles() {
+      document.querySelectorAll('.day[data-date]').forEach(day => {
+        const date = day.dataset.date;
+        const raw = localStorage.getItem('note-'+date) || '';
+        const temp = document.createElement('div'); temp.innerHTML = raw;
+        const has = temp.innerText.trim().length>0;
+        day.classList.toggle('has-note', has);
+      });
+    }
+
+    // Filter by plain text
+    function filterDays(query) {
+      const q = query.trim().toLowerCase();
+      document.querySelectorAll('.day[data-date]').forEach(day => {
+        if (!q) { day.classList.remove('hidden'); return; }
+        const raw = localStorage.getItem('note-'+day.dataset.date) || '';
+        const temp = document.createElement('div'); temp.innerHTML = raw;
+        const text = temp.innerText.toLowerCase();
+        day.classList.toggle('hidden', !text.includes(q));
+      });
+    }
+
+    // Backup functions
+    function downloadBackup() {
+      const data = {};
+      for (let i=0;i<localStorage.length;i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('note-')||key==='todos') data[key]=localStorage.getItem(key);
+      }
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='calendar_backup.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+    function uploadBackup(event) {
+      const file=event.target.files[0]; if(!file) return;
+      const reader=new FileReader();
+      reader.onload=e=>{
+        try {
+          const data=JSON.parse(e.target.result);
+          // clear existing
+          Object.keys(localStorage).forEach(k=>{ if(k.startsWith('note-')||k==='todos') localStorage.removeItem(k); });
+          // restore
+          Object.entries(data).forEach(([k,v])=>{ localStorage.setItem(k,v); });
+          alert('Backup uploaded. Reloading...');
+          location.reload();
+        } catch { alert('Invalid backup file.'); }
+      };
+      reader.readAsText(file);
+    }
+
+    document.addEventListener('DOMContentLoaded',()=>{
+      const currentYear=new Date().getFullYear();
+      for (let y=currentYear; y<=currentYear+2; y++) generateYear(y);
+      updateAllDayStyles();
+      document.getElementById('search-box').addEventListener('input',e=>filterDays(e.target.value));
+      todoEditor.root.innerHTML = localStorage.getItem('todos')||'';
+      todoEditor.on('text-change',()=> localStorage.setItem('todos', todoEditor.root.innerHTML));
+    });
+  </script>
+</body>
+</html>
+
+
