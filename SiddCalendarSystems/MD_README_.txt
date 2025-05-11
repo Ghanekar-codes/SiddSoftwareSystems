@@ -39,6 +39,8 @@ Notes can be backed up and uploaded to, topics can be added and removed
 the notation style is made after the cornell note system
 
 
+To update certain changes, remember to refresh!
+
 
 
 
